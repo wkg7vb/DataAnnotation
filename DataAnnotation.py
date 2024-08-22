@@ -1,4 +1,3 @@
-#imports
 import codecs
 import os
 import requests
@@ -8,16 +7,15 @@ from pyparsing import empty
 testUrl = "https://docs.google.com/document/d/e/2PACX-1vRMx5YQlZNa3ra8dYYxmv-QIQ3YJe8tbI3kqcuC7lQiZm-CSEznKfN_HYNSpoXcZIV3Y_O3YoUB1ecq/pub"
 url = "https://docs.google.com/document/d/e/2PACX-1vShuWova56o7XS1S3LwEIzkYJA8pBQENja01DNnVDorDVXbWakDT4NioAScvP1OCX6eeKSqRyzUW_qJ/pub"
 
-#obtain file from url
 def download_file_from_google_drive(url, file_id, destination):
     session = requests.Session()
 
-    response = session.get(URL, params={"id": file_id}, stream=True)
+    response = session.get(url, params={"id": file_id}, stream=True)
     token = get_confirm_token(response)
 
     if token:
         params = {"id": file_id, "confirm": token}
-        response = session.get(URL, params=params, stream=True)
+        response = session.get(url, params=params, stream=True)
 
     save_response_content(response, destination)
 
@@ -42,99 +40,75 @@ def open_file(fileName):
     with codecs.open(fileName, 'r', "utf-8") as file:
         data = file.readlines()
         document = data[198]
-        #print(document)
         file.close()
         os.remove("DESTINATION_FILE_ON_YOUR_DISK")
         return document
 
 def parse_file(doc):
-    i = doc.find("<table class") + 12
-    doc = doc[i:]
-    maxX = '0'
-    maxY = '0'
-
+    maxX = 0
+    maxY = 0
+    table = "<table"
+    closeTable = "</table>"
     start = ">"
     end = "<"
 
-    i = doc.find(start) + 1
-    doc = doc[i:]
+    coords = [[' ' for _ in range(3)] for _ in range(1000)]
 
-    while doc[0] == end:
-        i = doc.find(start) + 1
-        doc = doc[i:]
-    xcoord = doc[0:doc.find(end)]
-    i = doc.find(start) + 1
-    doc = doc[i:]
-    while doc[0] == end:
-        i = doc.find(start) + 1
-        doc = doc[i:]
-    char = doc[0:doc.find(end)]
-    i = doc.find(start) + 1
-    doc = doc[i:]
-    while doc[0] == end:
-        i = doc.find(start) + 1
-        doc = doc[i:]
-    ycoord = doc[0:doc.find(end)]
-    i = doc.find(start) + 1
-    doc = doc[i:]
+    doc = doc[doc.find(table):]
+    doc = doc[:doc.find(closeTable)]
 
-    coords = [[ycoord, xcoord, char]]
+    counter = 0
+    while doc != empty:
+        counter += 1
+        try:
+            doc = doc[(doc.find(start) + 1):]
+            while doc[0] == end and doc[0] != empty:
+                doc = doc[(doc.find(start) + 1):]
+        except IndexError:
+            break
 
-    while doc[0] != 'f':
-        while doc[0] == end:
-            i = doc.find(start) + 1
-            doc = doc[i:]
-        xcoord = doc[0:doc.find(end)]
-        if int(xcoord) > int(maxX):
-            maxX = xcoord
-        i = doc.find(start) + 1
-        doc = doc[i:]
-        while doc[0] == end:
-            i = doc.find(start) + 1
-            doc = doc[i:]
-        char = doc[0:doc.find(end)]
-        i = doc.find(start) + 1
-        doc = doc[i:]
-        while doc[0] == end:
-            i = doc.find(start) + 1
-            doc = doc[i:]
-        ycoord = doc[0:doc.find(end)]
-        if ycoord > maxY:
-            maxY = ycoord
-        i = doc.find(start) + 1
-        doc = doc[i:]
-
-        coords.append([ycoord, xcoord, char])
+        match (counter % 3):
+            case 1:
+                xcoord = doc[0:doc.find(end)]
+                coords[int(counter / 3)][counter % 3] = xcoord
+            case 2:
+                char = doc[0:doc.find(end)]
+                coords[int(counter / 3)][counter % 3] = char
+            case 0:
+                ycoord = doc[0:doc.find(end)]
+                coords[int((counter / 3) - 1)][(counter % 3)-3] = ycoord
     coords.pop(0)
-    print(coords, "      ", maxX, maxY)
-    print_grid(coords, int(maxX), int(maxY))
-    return
+    print_grid(coords)
 
-def print_grid(coords, maxX, maxY):
-    print(coords)
-    newGrid = [[' ' for i in range(maxX + 1)] for j in range(maxY + 1)]
+def print_grid(coords):
+    maxX = 100
+    maxY = 10
+    newGrid = [[' ' for _ in range(maxX)] for _ in range(maxY)]
     for row in coords:
-        newGrid[int(row[0])][int(row[1])] = row[2]
-    countY = maxY
+        try:
+            newGrid[int(row[0])][int(row[1])] = row[2]
+        except ValueError:
+            break
+    countY = maxY - 1
     while (countY >= 0):
         countX = 0
-        while (countX <= maxX):
+        while (countX <= maxX - 1):
             print(newGrid[countY][countX], end = "")
             countX += 1
         print()
         countY -= 1
 
 
-def main(testUrl):
+def main(url):
     if len(sys.argv) >= 3:
         file_id = sys.argv[1]
         destination = sys.argv[2]
     else:
         file_id = "TAKE_ID_FROM_SHAREABLE_LINK"
         destination = "DESTINATION_FILE_ON_YOUR_DISK"
-    download_file_from_google_drive(testUrl, file_id, destination)
+    download_file_from_google_drive(url, file_id, destination)
     file = open_file(destination)
     parse_file(file)
 
 if __name__ == "__main__":
-    main()
+    main(url)
